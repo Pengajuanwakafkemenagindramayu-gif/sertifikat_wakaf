@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pengajuan Sertifikat Wakaf - Kantor Kementerian Agama Kab. Indramayu</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <style>
+        @media print { .no-print { display: none !important; } }
+        .status-belum { background: #fef3c7; color: #92400e; }
+        .status-proses { background: #dbeafe; color: #1e40af; }
+        .status-perbaiki { background: #fee2e2; color: #b91c1c; }
+        .status-terbit { background: #d1fae5; color: #065f46; }
+        .status-kembali { background: #fed7aa; color: #9a3412; }
+        .status-tutup { background: #f3f4f6; color: #4b5563; }
+        .modal { display: none; position: fixed; inset: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 50; }
+        .modal.active { display: flex; align-items: center; justify-content: center; }
+        .modal-content { background: white; border-radius: 0.5rem; width: 90%; max-width: 600px; max-height: 90vh; overflow-y: auto; }
+        .btn-detail { background: #10b981; color: white; padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; margin: 0 0.125rem; }
+        .btn-ubah { background: #3b82f6; color: white; padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; margin: 0 0.125rem; }
+        .btn-hapus { background: #ef4444; color: white; padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; margin: 0 0.125rem; }
+        .detail-table td { border-bottom: 1px solid #e5e7eb; padding: 0.5rem; font-size: 0.9rem; }
+        .detail-table td:first-child { font-weight: 600; background: #f9fafb; width: 35%; }
+        .loading { opacity: 0.6; pointer-events: none; }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+<!-- HEADER -->
+<header class="bg-green-800 text-white shadow">
+    <div class="container mx-auto px-4 py-3 flex flex-wrap justify-between items-center">
+        <div class="flex items-center gap-3">
+            <i class="fa-solid fa-landmark-flag text-2xl"></i>
+            <div>
+                <h1 class="text-lg font-bold">Pengajuan Sertifikat Wakaf</h1>
+                <p class="text-sm text-green-200">Kantor Kementerian Agama Kabupaten Indramayu</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-3 mt-2 md:mt-0 no-print">
+            <span id="infoPengguna" class="text-sm text-green-200">Pengunjung</span>
+            <button id="btnLoginAdmin" onclick="tampilLoginAdmin()" class="bg-green-600 px-3 py-1 rounded text-sm">
+                <i class="fa-solid fa-user-lock"></i> Admin
+            </button>
+            <button id="btnKeluarAdmin" onclick="logoutAdmin()" class="hidden bg-red-600 px-3 py-1 rounded text-sm">
+                <i class="fa-solid fa-right-from-bracket"></i> Keluar
+            </button>
+        </div>
+    </div>
+</header>
+
+<!-- NAVIGASI -->
+<nav class="bg-white shadow-sm mb-4">
+    <div class="container mx-auto px-4 py-2 flex flex-wrap gap-2">
+        <button onclick="showSection('data')" class="px-3 py-2 bg-green-100 rounded font-medium">
+            <i class="fa-solid fa-table-list"></i> Data Pengajuan
+        </button>
+        <button onclick="showSection('rekap')" class="px-3 py-2 bg-gray-100 rounded font-medium">
+            <i class="fa-solid fa-chart-pie"></i> Rekapitulasi
+        </button>
+        <button id="btnMenuAdmin" onclick="showSection('admin')" class="hidden px-3 py-2 bg-gray-100 rounded font-medium">
+            <i class="fa-solid fa-user-gear"></i> Pengaturan Pengguna
+        </button>
+    </div>
+</nav>
+
+<!-- KONTEN -->
+<main class="container mx-auto px-4 pb-10">
+    <!-- DATA -->
+    <section id="secData">
+        <div class="bg-white rounded-lg shadow p-4 mb-4 flex flex-wrap gap-2 items-center no-print">
+            <div class="flex-1 min-w-[250px] relative">
+                <input type="text" id="cariData" placeholder="Cari..." class="w-full pl-10 py-2 border rounded-lg" oninput="tampilData()">
+                <i class="fa-solid fa-search absolute left-3 top-2.5 text-gray-400"></i>
+            </div>
+            <select id="filterTahun" class="px-3 py-2 border rounded-lg" onchange="tampilData()"></select>
+            <select id="filterStatus" class="px-3 py-2 border rounded-lg" onchange="tampilData()">
+                <option value="">Semua Status</option>
+                <option>Belum Diajukan</option><option>Proses Kantah</option>
+                <option>Berkas Diperbaiki</option><option>Terbit Sertifikat</option>
+                <option>Berkas Dikembalikan</option><option>Berkas Ditutup</option>
+            </select>
+            <div id="btnAdminOnly" class="flex gap-2 hidden">
+                <button onclick="tambahForm()" class="bg-green-600 text-white px-3 py-2 rounded">
+                    <i class="fa-solid fa-plus"></i> Tambah Data
+                </button>
+                <button onclick="eksporExcel()" class="bg-indigo-600 text-white px-3 py-2 rounded">
+                    <i class="fa-solid fa-file-export"></i> Ekspor Excel
+                </button>
+            </div>
+        </div>
+        <div class="overflow-x-auto bg-white rounded-lg shadow">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-50 border-b">
+                    <tr>
+                        <th class="px-2 py-2 text-center">No</th>
+                        <th class="px-2 py-2">Nama Wakif</th>
+                        <th class="px-2 py-2">Nama Nazhir</th>
+                        <th class="px-2 py-2">Akta</th>
+                        <th class="px-2 py-2">Peruntukan</th>
+                        <th class="px-2 py-2 text-center">Luas</th>
+                        <th class="px-2 py-2">Status</th>
+                        <th class="px-2 py-2 text-center">Tahun</th>
+                        <th class="px-2 py-2 text-center no-print">Aksi</th>
+                    </tr>
+                </thead>
+                <tbody id="tabelBody"></tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- REKAPITULASI -->
+    <section id="secRekap" class="hidden">
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-xl font-bold mb-4 text-center text-green-800">Rekapitulasi Pengajuan Sertifikat Wakaf</h2>
+            <p class="text-center mb-4">Kantor Kementerian Agama Kabupaten Indramayu</p>
+            <div class="overflow-x-auto mb-6">
+                <table class="w-full border text-sm">
+                    <thead class="bg-green-100">
+                        <tr><th class="border px-3 py-2" rowspan="2">Tahun</th>
+                        <th class="border px-2 py-1" colspan="7">Jumlah Berdasarkan Status</th></tr>
+                        <tr>
+                            <th class="border px-2 py-1">Belum</th><th class="border px-2 py-1">Proses</th>
+                            <th class="border px-2 py-1">Perbaiki</th><th class="border px-2 py-1">Terbit</th>
+                            <th class="border px-2 py-1">Kembali</th><th class="border px-2 py-1">Tutup</th>
+                            <th class="border px-2 py-1">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rekapBody"></tbody>
+                    <tfoot id="rekapTotal" class="bg-yellow-50 font-bold"></tfoot>
+                </table>
+            </div>
+            <button id="btnCetakRekap" onclick="window.print()" class="hidden no-print bg-green-600 text-white px-4 py-2 rounded">
+                <i class="fa-solid fa-print"></i> Cetak Rekapitulasi
+            </button>
+        </div>
+    </section>
+</main>
+
+<!-- MODAL DETAIL -->
+<div id="modalDetail" class="modal">
+    <div class="modal-content p-6 m-4">
+        <h3 class="text-lg font-bold mb-4 text-green-800 text-center">Detail Data</h3>
+        <div id="isiDetail"></div>
+        <div class="flex justify-end mt-4">
+            <button onclick="tutupModalDetail()" class="px-4 py-2 bg-green-600 text-white rounded">Tutup</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL LOGIN -->
+<div id="modalLoginAdmin" class="modal">
+    <div class="modal-content p-6 m-4 max-w-md">
+        <h3 class="text-lg font-bold mb-4 text-green-800 text-center">Login Administrator</h3>
+        <div class="space-y-4">
+            <div><label class="block text-sm font-medium mb-1">Username</label><input type="text" id="adminUser" class="w-full px-3 py-2 border rounded-lg"></div>
+            <div><label class="block text-sm font-medium mb-1">Kata Sandi</label><input type="password" id="adminPass" class="w-full px-3 py-2 border rounded-lg"></div>
+            <div class="flex gap-2 justify-end">
+                <button onclick="tutupLoginAdmin()" class="px-4 py-2 border rounded">Batal</button>
+                <button onclick="loginAdmin()" class="px-4 py-2 bg-green-600 text-white rounded">Masuk</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL FORM -->
+<div id="modalForm" class="modal">
+    <div class="modal-content p-6 m-4">
+        <h3 id="modalJudul" class="text-lg font-bold mb-4 text-green-800"></h3>
+        <form id="formData" class="space-y-3">
+            <input type="hidden" id="editIndex">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div><label class="block text-sm font-medium mb-1">Nama Wakif *</label><input type="text" id="f_wakif" required class="w-full px-3 py-2 border rounded-lg"></div>
+                <div><label class="block text-sm font-medium mb-1">Nama Nazhir *</label><input type="text" id="f_nazhir" required class="w-full px-3 py-2 border rounded-lg"></div>
+                <div><label class="block text-sm font-medium mb-1">Akta Ikrar Wakaf</label><input type="text" id="f_akta" class="w-full px-3 py-2 border rounded-lg"></div>
+                <div><label class="block text-sm font-medium mb-1">Peruntukan *</label><input type="text" id="f_peruntukan" required class="w-full px-3 py-2 border rounded-lg"></div>
+                <div><label class="block text-sm font-medium mb-1">Luas (m²) *</label><input type="number" step="0.01" id="f_luas" required class="w-full px-3 py-2 border rounded-lg"></div>
+                <div><label class="block text-sm font-medium mb-1">Alas Hak</label><input type="text" id="f_alashak" class="w-full px-3 py-2 border rounded-lg"></div>
+                <div class="md:col-span-2"><label class="block text-sm font-medium mb-1">Alamat Wakaf</label><textarea id="f_alamatwakaf" rows="2" class="w-full px-3 py-2 border rounded-lg"></textarea></div>
+                <div class="md:col-span-2"><label class="block text-sm font-medium mb-1">Alamat Peruntukan</label><textarea id="f_alamattujuan" rows="2" class="w-full px-3 py-2 border rounded-lg"></textarea></div>
+                <div><label class="block text-sm font-medium mb-1">Tanggal Pengajuan BPN</label><input type="date" id="f_tglbpn" class="w-full px-3 py-2 border rounded-lg"></div>
+                <div><label class="block text-sm font-medium mb-1">Nomor Berkas BPN</label><input type="text" id="f_noberkas" class="w-full px-3 py-2 border rounded-lg"></div>
+                <div><label class="block text-sm font-medium mb-1">Status *</label>
+                    <select id="f_status" required class="w-full px-3 py-2 border rounded-lg">
+                        <option>Belum Diajukan</option><option>Proses Kantah</option>
+                        <option>Berkas Diperbaiki</option><option>Terbit Sertifikat</option>
+                        <option>Berkas Dikembalikan</option><option>Berkas Ditutup</option>
+                    </select>
+                </div>
+                <div><label class="block text-sm font-medium mb-1">Tahun *</label><input type="number" id="f_tahun" required class="w-full px-3 py-2 border rounded-lg"></div>
+                <div class="md:col-span-2"><label class="block text-sm font-medium mb-1">Keterangan</label><textarea id="f_keterangan" rows="2" class="w-full px-3 py-2 border rounded-lg"></textarea></div>
+            </div>
+            <div class="flex gap-2 justify-end mt-4">
+                <button type="button" onclick="tutupModal()" class="px-4 py-2 border rounded">Batal</button>
+                <button type="submit" class="px-4 py-2 bg-green-600 text-white rounded">Simpan</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// ================= KONFIGURASI =================
+// ==== GANTI URL DI BAWAH DENGAN URL HASIL DEPLOYMENT ANDA ====
+const URL_API = 'https://script.google.com/macros/s/AKfycbziXCGbZj4OQtXwrCMOYqRAj2JWy_5GHCE_X2k3kotYqLNGXc6DcSHAkKunDOyGvsk/exec';
+// ==============================================================
+
+let dataPengajuan = [];
+let daftarPengguna = [];
+let isAdmin = false;
+
+const cssStatus = {
+    'Belum Diajukan': 'status-belum', 'Proses Kantah': 'status-proses',
+    'Berkas Diperbaiki': 'status-perbaiki', 'Terbit Sertifikat': 'status-terbit',
+    'Berkas Dikembalikan': 'status-kembali', 'Berkas Ditutup': 'status-tutup'
+};
+
+window.onload = async function() {
+    await muatDataDariServer();
+    await muatPenggunaDariServer();
+    isiFilterTahun();
+    tampilData();
+    tampilRekapitulasi();
+};
+
+// ==== AMBIL DATA DARI GOOGLE SHEETS ====
+async function muatDataDariServer() {
+    try {
+        const res = await fetch(URL_API);
+        dataPengajuan = await res.json();
+    } catch(e) {
+        alert('Gagal ambil data: ' + e.message);
+    }
+}
+
+async function muatPenggunaDariServer() {
+    try {
+        const res = await fetch(URL_API + '/pengguna');
+        daftarPengguna = await res.json();
+    } catch(e) {
+        console.log('Gagal ambil daftar pengguna');
+    }
+}
+
+// ==== SIMPAN DATA KE GOOGLE SHEETS ====
+async function simpanKeServer(rek, barisIndeks = null) {
+    const aksi = barisIndeks === null ? 'simpan' : 'ubah';
+    const url = barisIndeks === null ? URL_API : `${URL_API}?action=${aksi}&baris=${barisIndeks}`;
+    const res = await fetch(url, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(rek)
+    });
+    return await res.json();
+}
+
+// ==== HAPUS DATA DARI GOOGLE SHEETS ====
+async function hapusDariServer(barisIndeks) {
+    const res = await fetch(`${URL_API}?action=hapus&baris=${barisIndeks}`, {method: 'POST'});
+    return await res.json();
+}
+
+// ==== LOGIN & MENU ====
+function tampilLoginAdmin() { document.getElementById('modalLoginAdmin').classList.add('active'); }
+function tutupLoginAdmin() { document.getElementById('modalLoginAdmin').classList.remove('active'); }
+function loginAdmin() {
+    const u = document.getElementById('adminUser').value.trim();
+    const p = document.getElementById('adminPass').value;
+    const user = daftarPengguna.find(x => x.username === u && x.password === p && x.peran === 'admin');
+    if (!user) return alert('Username atau kata sandi salah!');
+    isAdmin = true;
+    tutupLoginAdmin();
+    document.getElementById('infoPengguna').textContent = 'Administrator';
+    document.getElementById('btnLoginAdmin').classList.add('hidden');
+    document.getElementById('btnKeluarAdmin').classList.remove('hidden');
+    document.getElementById('btnMenuAdmin').classList.remove('hidden');
+    document.getElementById('btnAdminOnly').classList.remove('hidden');
+    document.getElementById('btnCetakRekap').classList.remove('hidden');
+    tampilData();
+}
+function logoutAdmin() {
+    isAdmin = false;
+    showSection('data');
+    document.getElementById('infoPengguna').textContent = 'Pengunjung';
+    document.getElementById('btnLoginAdmin').classList.remove('hidden');
+    document.getElementById('btnKeluarAdmin').classList.add('hidden');
+    document.getElementById('btnMenuAdmin').classList.add('hidden');
+    document.getElementById('btnAdminOnly').classList.add('hidden');
+    document.getElementById('btnCetakRekap').classList.add('hidden');
+    tampilData();
+}
+
+// ==== NAVIGASI ====
+function showSection(nama) {
+    document.getElementById('secData').classList.add('hidden');
+    document.getElementById('secRekap').classList.add('hidden');
+    if (nama === 'data') { document.getElementById('secData').classList.remove('hidden'); }
+    else if (nama === 'rekap') { document.getElementById('secRekap').classList.remove('hidden'); tampilRekapitulasi(); }
+}
+
+// ==== LIHAT DETAIL ====
+function tampilDetail(indeks) {
+    const d = dataPengajuan[indeks];
+    document.getElementById('isiDetail').innerHTML = `
+        <table class="detail-table w-full">
+            <tr><td>Nama Wakif</td><td>${d.wakif||'-'}</td></tr>
+            <tr><td>Nama Nazhir</td><td>${d.nazhir||'-'}</td></tr>
+            <tr><td>Akta Ikrar Wakaf</td><td>${d.aktaIkrarWakaf||'-'}</td></tr>
+            <tr><td>Peruntukan</td><td>${d.peruntukan||'-'}</td></tr>
+            <tr><td>Luas</td><td>${d.luas||'-'} m²</td></tr>
+            <tr><td>Alas Hak</td><td>${d.alasHak||'-'}</td></tr>
+            <tr><td>Alamat Wakaf</td><td>${d.alamatWakaf||'-'}</td></tr>
+            <tr><td>Alamat Peruntukan</td><td>${d.alamatPeruntukan||'-'}</td></tr>
+            <tr><td>Tgl Pengajuan BPN</td><td>${d.tanggalPengajuanBPN||'-'}</td></tr>
+            <tr><td>No Berkas BPN</td><td>${d.nomorBerkasBPN||'-'}</td></tr>
+            <tr><td>Status</td><td><span class="px-2 py-1 rounded text-sm ${cssStatus[d.status]||''}">${d.status||'-'}</span></td></tr>
+            <tr><td>Tahun</td><td>${d.tahun||'-'}</td></tr>
+            <tr><td>Keterangan</td><td>${d.keterangan||'-'}</td></tr>
+        </table>`;
+    document.getElementById('modalDetail').classList.add('active');
+}
+function tutupModalDetail() { document.getElementById('modalDetail').classList.remove('active'); }
+
+// ==== TAMBAH & UBAH ====
+function tambahForm() {
+    if (!isAdmin) return alert('Akses ditolak!');
+    document.getElementById('modalJudul').textContent = 'Tambah Pengajuan';
+    document.getElementById('editIndex').value = '';
+    document.getElementById('formData').reset();
+    document.getElementById('modalForm').classList.add('active');
+}
+async function ubahData(indeks) {
+    if (!isAdmin) return alert('Akses ditolak!');
+    const d = dataPengajuan[indeks];
+    document.getElementById('modalJudul').textContent = 'Ubah Pengajuan';
+    document.getElementById('editIndex').value = indeks;
+    document.getElementById('f_wakif').value = d.wakif;
+    document.getElementById('f_nazhir').value = d.nazhir;
+    document.getElementById('f_akta').value = d.aktaIkrarWakaf;
+    document.getElementById('f_peruntukan').value = d.peruntukan;
+    document.getElementById('f_luas').value = d.luas;
+    document.getElementById('f_alashak').value = d.alasHak;
+    document.getElementById('f_alamatwakaf').value = d.alamatWakaf;
+    document.getElementById('f_alamattujuan').value = d.alamatPeruntukan;
+    document.getElementById('f_tglbpn').value = d.tanggalPengajuanBPN;
+    document.getElementById('f_noberkas').value = d.nomorBerkasBPN;
+    document.getElementById('f_status').value = d.status;
+    document.getElementById('f_tahun').value = d.tahun;
+    document.getElementById('f_keterangan').value = d.keterangan;
+    document.getElementById('modalForm').classList.add('active');
+}
+
+document.getElementById('formData').addEventListener('submit', async e => {
+    e.preventDefault();
+    const idx = document.getElementById('editIndex').value;
+    const rek = {
+        wakif: document.getElementById('f_wakif').value.trim(),
+        nazhir: document.getElementById('f_nazhir').value.trim(),
+        aktaIkrarWakaf: document.getElementById('f_akta').value.trim(),
+        peruntukan: document.getElementById('f_peruntukan').value.trim(),
+        luas: document.getElementById('f_luas').value,
+        alasHak: document.getElementById('f_alashak').value.trim(),
+        alamatWakaf: document.getElementById('f_alamatwakaf').value.trim(),
+        alamatPeruntukan: document.getElementById('f_alamattujuan').value.trim(),
+        tanggalPengajuanBPN: document.getElementById('f_tglbpn').value,
+        nomorBerkasBPN: document.getElementById('f_noberkas').value.trim(),
+        status: document.getElementById('f_status').value,
+        tahun: document.getElementById('f_tahun').value,
+        keterangan: document.getElementById('f_keterangan').value.trim()
+    };
+
+    if (idx === '') {
+        await simpanKeServer(rek);
+    } else {
+        await simpanKeServer(rek, Number(idx));
+    }
+    await muatDataDariServer();
+    tutupModal();
+    isiFilterTahun();
+    tampilData();
+    tampilRekapitulasi();
+});
+
+async function hapusData(indeks) {
+    if (!isAdmin) return alert('Akses ditolak!');
+    if (!confirm('Yakin akan dihapus?')) return;
+    await hapusDariServer(indeks);
+    await muatDataDariServer();
+    isiFilterTahun();
+    tampilData();
+    tampilRekapitulasi();
+}
+
+function tutupModal() { document.getElementById('modalForm').classList.remove('active'); }
+
+// ==== TAMPIL DATA ====
+function tampilData() {
+    const kataKunci = document.getElementById('cariData').value.toLowerCase();
+    const thn = document.getElementById('filterTahun').value;
+    const st = document.getElementById('filterStatus').value;
+    let hasil = dataPengajuan.filter(d => {
+        const cocokCari = !kataKunci ||
+            d.wakif.toLowerCase().includes(kataKunci) ||
+            d.nazhir.toLowerCase().includes(kataKunci) ||
+            (d.nomorBerkasBPN||'').toLowerCase().includes(kataKunci);
+        const cocokThn = thn === '' || d.tahun === thn;
+        const cocokSt = st === '' || d.status === st;
+        return cocokCari && cocokThn && cocokSt;
+    });
+    const badan = document.getElementById('tabelBody');
+    badan.innerHTML = '';
+    hasil.forEach((d, i) => {
+        const indeksAsli = dataPengajuan.indexOf(d);
+        let tombolAksi = `<button onclick="tampilDetail(${indeksAsli})" class="btn-detail"><i class="fa-solid fa-eye"></i> Detail</button>`;
+        if (isAdmin) {
+            tombolAksi += `
+                <button onclick="ubahData(${indeksAsli})" class="btn-ubah"><i class="fa-solid fa-pen-to-square"></i> Ubah</button>
+                <button onclick="hapusData(${indeksAsli})" class="btn-hapus"><i class="fa-solid fa-trash"></i> Hapus</button>
+            `;
+        }
+        badan.innerHTML += `
+            <tr class="border-b hover:bg-gray-50">
+                <td class="px-2 py-2 text-center">${i+1}</td>
+                <td class="px-2 py-2">${d.wakif}</td>
+                <td class="px-2 py-2">${d.nazhir}</td>
+                <td class="px-2 py-2">${d.aktaIkrarWakaf||'-'}</td>
+                <td class="px-2 py-2">${d.peruntukan}</td>
+                <td class="px-2 py-2 text-center">${d.luas}</td>
+                <td class="px-2 py-2 text-center"><span class="px-2 py-1 rounded text-xs ${cssStatus[d.status]||''}">${d.status}</span></td>
+                <td class="px-2 py-2 text-center">${d.tahun}</td>
+                <td class="px-2 py-2 text-center no-print">${tombolAksi}</td>
+            </tr>`;
+    });
+}
+
+// ==== REKAPITULASI ====
+function tampilRekapitulasi() {
+    const kelompok = {};
+    const statusList = ['Belum Diajukan','Proses Kantah','Berkas Diperbaiki','Terbit Sertifikat','Berkas Dikembalikan','Berkas Ditutup'];
+    dataPengajuan.forEach(d => {
+        if (!kelompok[d.tahun]) kelompok[d.tahun] = statusList.reduce((o,s)=>({...o,[s]:0}),{total:0});
+        kelompok[d.tahun][d.status]++;
+        kelompok[d.tahun].total++;
+    });
+    const badan = document.getElementById('rekapBody');
+    badan.innerHTML = '';
+    let totalAkhir = {...statusList.reduce((o,s)=>({...o,[s]:0}),{}), total:0};
+    Object.keys(kelompok).sort().forEach(thn => {
+        const d = kelompok[thn];
+        statusList.forEach(s => totalAkhir[s] += d[s]);
+        totalAkhir.total += d.total;
+        badan.innerHTML += `<tr><td class="border px-3 py-2 font-semibold">${thn}</td>
+            ${statusList.map(s=>`<td class="border px-2 py-1 text-center">${d[s]}</td>`).join('')}
+            <td class="border px-2 py-1 text-center font-bold">${d.total}</td></tr>`;
+    });
+    document.getElementById('rekapTotal').innerHTML = `<tr><td class="border px-3 py-2 font-semibold">JUMLAH</td>
+        ${statusList.map(s=>`<td class="border px-2 py-1 text-center">${totalAkhir[s]}</td>`).join('')}
+        <td class="border px-2 py-1 text-center font-bold">${totalAkhir.total}</td></tr>`;
+}
+
+// ==== FILTER TAHUN ====
+function isiFilterTahun() {
+    const sel = document.getElementById('filterTahun');
+    const thnSet = [...new Set(dataPengajuan.map(d=>d.tahun).filter(t=>t))].sort((a,b)=>b.localeCompare(a));
+    const pilih = sel.value;
+    sel.innerHTML = '<option value="">Semua Tahun</option>' + thnSet.map(t=>`<option value="${t}">${t}</option>`).join('');
+    sel.value = pilih;
+}
+
+// ==== EKSPOR EXCEL ====
+function eksporExcel() {
+    if (!isAdmin) return alert('Akses ditolak!');
+    const kolom = ['Nama Wakif','Nama Nazhir','Akta Ikrar Wakaf','Peruntukan','Luas','Alas Hak','Alamat Wakaf','Alamat Peruntukan','Tanggal Pengajuan BPN','Nomor Berkas BPN','Status','Tahun','Keterangan'];
+    const baris = dataPengajuan.map(d=>[d.wakif,d.nazhir,d.aktaIkrarWakaf,d.peruntukan,d.luas,d.alasHak,d.alamatWakaf,d.alamatPeruntukan,d.tanggalPengajuanBPN,d.nomorBerkasBPN,d.status,d.tahun,d.keterangan]);
+    const buku = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(buku, XLSX.utils.aoa_to_sheet([kolom,...baris]), 'Pengajuan');
+    XLSX.writeFile(buku, 'Pengajuan_Sertifikat_Wakaf_Indramayu.xlsx');
+}
+</script>
+</body>
+</html>
